@@ -161,6 +161,68 @@ void error(char *fmt, ...)
 /* run_program: fork and exec a program. */
 void run_program(char** argv, int argc, bool foreground, bool doing_pipe)
 {
+
+	// not foreground = fork child, parent dont wait
+	// doing_pipe = stout ska gå någon annan stans. Den ska gå vidare
+	
+	int child_pid = fork();
+	int current_pid = getpid();
+
+	if(strcmp(argv[0], "cd") == 0) {
+		chdir(argv[1]);
+		return;
+	}
+
+	// We are in the child process
+	if(child_pid == 0) {
+		// Child
+		if(!foreground) {
+			printf("%s\n", "This is a background process");
+			// Set output_fd to null
+			close(output_fd);
+			output_fd = open("/dev/null", O_WRONLY);
+		}
+		dup2(output_fd, 1);
+		dup2(input_fd, 0);
+
+		// The arguments to the program 
+		if(argc != 1) {
+			for(int i = 1; i < (sizeof(argv) / sizeof(int)); i++) {
+				printf("Argument %d is %s\n", i, argv[i]);
+			}
+		}
+
+		// int list_length = length(path_dir_list);
+		while(length(path_dir_list) != 0) {
+			void* current_dir_path = remove_first(&path_dir_list);
+			// printf("Current path entry is %s\n", current_dir_path);
+			// printf("Length of path list is %u\n", length(path_dir_list));
+			char program_path[100] = "";
+			char *cur = program_path, * const end = program_path + sizeof program_path;
+			cur += snprintf(cur, end-cur, "%s", current_dir_path);
+			cur += snprintf(cur, end-cur, "%s", "/");
+			cur += snprintf(cur, end-cur, "%s", argv[0]);
+			// printf("PATH WITH PROGRAM IS %s \n", program_path);
+			if (access(program_path, F_OK|X_OK) == 0) {
+				printf("I can execute %s\n", program_path);
+				int res = execv(program_path, argv);
+				if (res != 0) {
+					printf("%s", "GOT ERROR WAT");
+				}
+			}
+		}		
+
+	}
+	else {
+		// Parent
+		waitpid(child_pid, NULL, 0);
+	}
+
+
+	
+	// printf("Length is %d", list_length);
+
+
 	/* you need to fork, search for the command in argv[0],
          * setup stdin and stdout of the child process, execv it.
          * the parent should sometimes wait and sometimes not wait for
@@ -200,10 +262,12 @@ void parse_line(void)
 
 		switch (type) {
 		case NORMAL:
+			printf("NORMAL\n");
 			argc += 1;
 			break;
 
 		case INPUT:
+			printf("INPUT\n");
 			type = gettoken(&argv[argc]);
 			if (type != NORMAL) {
 				error("expected file name: but found %s", 
@@ -219,6 +283,7 @@ void parse_line(void)
 			break;
 
 		case OUTPUT:
+			printf("OUTPUT\n");
 			type = gettoken(&argv[argc]);
 			if (type != NORMAL) {
 				error("expected file name: but found %s", 
@@ -233,17 +298,21 @@ void parse_line(void)
 			break;
 
 		case PIPE:
+			printf("PIPE\n");
 			doing_pipe = true;
 
 			/*FALLTHROUGH*/
 
 		case AMPERSAND:
+			printf("AMPERSAND\n");
 			foreground = false;
 
 			/*FALLTHROUGH*/
 
 		case NEWLINE:
+			printf("NEWLINE\n");
 		case SEMICOLON:
+			printf("SEMICOLON\n");
 
 			if (argc == 0)
 				return;
