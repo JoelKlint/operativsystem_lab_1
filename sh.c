@@ -162,6 +162,9 @@ void error(char *fmt, ...)
 void run_program(char** argv, int argc, bool foreground, bool doing_pipe)
 {
 
+	printf("Input pipe: %d\n", input_fd);
+	printf("Output pipe: %d\n", output_fd);
+
 	// not foreground = fork child, parent dont wait
 	// doing_pipe = stout ska gå någon annan stans. Den ska gå vidare
 	
@@ -174,17 +177,22 @@ void run_program(char** argv, int argc, bool foreground, bool doing_pipe)
 
 	// We are in the child process
 	if(child_pid == 0) {
+
+		om input_fd != 0. dup2 input
+		om output_fd != 0. dup2 output
+
+
 		// Child
 		if(!foreground && !doing_pipe) {
 			printf("%s\n", "This is a background process");
 			// Set output_fd to null
-			close(output_fd);
+			// close(output_fd);
 			output_fd = open("/dev/null", O_WRONLY);
 			dup2(output_fd, 1);
 		}
 		if(doing_pipe) {
-			dup2(input_fd, 0);
-			close(output_fd);
+			// dup2(input_fd, 0);
+			// close(output_fd);
 		}
 
 		while(length(path_dir_list) != 0) {
@@ -206,9 +214,13 @@ void run_program(char** argv, int argc, bool foreground, bool doing_pipe)
 	else {
 		// Parent
 		waitpid(child_pid, NULL, 0);
+
+Man kan alltid vänta. Men kan bli bättre iom parallellt. Vänta på sista
+
 		if(doing_pipe) {
-			dup2(output_fd, 1);
-			close(input_fd);
+			// dup2(output_fd, 1);
+			// dup2(output_fd, 1);
+			// close(input_fd);
 		}
 	}
 
@@ -290,10 +302,17 @@ void parse_line(void)
 			printf("PIPE\n");
 			doing_pipe = true;
 			pipe(pipe_fd);
-			close(input_fd);
-			close(output_fd);
-			input_fd = pipe_fd[0];
+			// printf("Input pipe: %d\n", pipe_fd[0]);
+			// printf("Output pipe: %d\n", pipe_fd[1]);
+			// close(input_fd);
+			// close(output_fd);
+			// printf("%s\n", "jello");
+			// input_fd = pipe_fd[0];
 			output_fd = pipe_fd[1];
+			// dup2(pipe_fd[0], 0);
+			// dup2(pipe_fd[1], 1);
+			// printf("Input pipe: %d\n", input_fd);
+			// printf("Output pipe: %d\n", output_fd);
 
 			/*FALLTHROUGH*/
 
@@ -314,6 +333,9 @@ void parse_line(void)
 			argv[argc] = NULL;
 
 			run_program(argv, argc, foreground, doing_pipe);
+
+			if pipe
+			sätt input_fd = pipe_fd[0]
 
 			input_fd	= 0;
 			output_fd	= 0;
