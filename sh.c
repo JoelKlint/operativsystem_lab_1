@@ -161,66 +161,83 @@ void error(char *fmt, ...)
 /* run_program: fork and exec a program. */
 void run_program(char** argv, int argc, bool foreground, bool doing_pipe)
 {
-
-	printf("Input pipe: %d\n", input_fd);
-	printf("Output pipe: %d\n", output_fd);
-
-	// not foreground = fork child, parent dont wait
-	// doing_pipe = stout ska gå någon annan stans. Den ska gå vidare
-	
-	int child_pid = fork();
-
 	if(strcmp(argv[0], "cd") == 0) {
-		chdir(argv[1]);
+		// HANDLE THIS CASE
+		// if(strcmp(argv[1], "-") == 0) {
+		// 	char* old_pwd = getenv("OLDPWD");
+		// 	printf("%s", old_pwd);
+		// 	setenv("OLDPWD", getenv("PWD"), 1);
+		// 	setenv("PWD", old_pwd, 1);
+		// 	chdir(old_pwd);
+		// }
+		// else {
+			setenv("OLDPWD", getenv("PWD"), 1);
+			chdir(argv[1]);
+			setenv("PWD", argv[1], 1);
+		// }
 		return;
 	}
 
+	// int child_pid = fork();
+
 	// We are in the child process
-	if(child_pid == 0) {
+	int child_pid;
+	if((child_pid = fork()) == 0) {
+		// printf("Current command: %s\n", argv[0]);
+		// printf("%s pid: %d\n", argv[0], getpid());
+		// printf("Input pipe: %d\n", input_fd);
+		// printf("Output pipe: %d\n", output_fd);
 
-		om input_fd != 0. dup2 input
-		om output_fd != 0. dup2 output
+		if(input_fd != 0) {
+			// printf("pid %d changing input to: %d\n", getpid(), input_fd);
+			dup2(input_fd, 0);
+		}
+		if(output_fd != 0) {
+			// printf("pid %d changing output to: %d\n", getpid(), output_fd);
+			dup2(output_fd, 1);
+		}
+
+		// om input_fd != 0. dup2 input
+		// om output_fd != 0. dup2 output
 
 
-		// Child
+		// This only happens in case of Ampersand
 		if(!foreground && !doing_pipe) {
-			printf("%s\n", "This is a background process");
-			// Set output_fd to null
-			// close(output_fd);
+			// printf("%s\n", "This is a background process");
 			output_fd = open("/dev/null", O_WRONLY);
 			dup2(output_fd, 1);
 		}
-		if(doing_pipe) {
-			// dup2(input_fd, 0);
-			// close(output_fd);
-		}
 
-		while(length(path_dir_list) != 0) {
-			void* current_dir_path = remove_first(&path_dir_list);
-			char program_path[100] = "";
-			char *cur = program_path, * const end = program_path + sizeof program_path;
-			cur += snprintf(cur, end-cur, "%s", current_dir_path);
-			cur += snprintf(cur, end-cur, "%s", "/");
-			cur += snprintf(cur, end-cur, "%s", argv[0]);
-			if (access(program_path, F_OK|X_OK) == 0) {
-				int res = execv(program_path, argv);
-				if (res != 0) {
-					printf("%s", "GOT ERROR WAT");
-				}
-			}
-		}		
+		execvp(argv[0], argv);
+
+		// while(length(path_dir_list) != 0) {
+		// 	void* current_dir_path = remove_first(&path_dir_list);
+		// 	char program_path[100] = "";
+		// 	char *cur = program_path, * const end = program_path + sizeof program_path;
+		// 	cur += snprintf(cur, end-cur, "%s", current_dir_path);
+		// 	cur += snprintf(cur, end-cur, "%s", "/");
+		// 	cur += snprintf(cur, end-cur, "%s", argv[0]);
+		// 	if (access(program_path, F_OK|X_OK) == 0) {
+		// 		 int res = execv(program_path, argv);
+		// 		 if (res != 0) {
+		// 		 	printf("%s", "GOT ERROR WAT");
+		// 		 }
+		// 	}
+		// }
+
+		// Kill child process
+		printf("Could not find command\n");
+		exit(1);		
 
 	}
 	else {
 		// Parent
-		waitpid(child_pid, NULL, 0);
-
-Man kan alltid vänta. Men kan bli bättre iom parallellt. Vänta på sista
-
-		if(doing_pipe) {
-			// dup2(output_fd, 1);
-			// dup2(output_fd, 1);
-			// close(input_fd);
+		// Man kan alltid vänta. Men kan bli bättre iom parallellt. Vänta på sista
+		// printf("\n");
+		if(!doing_pipe && foreground) {
+			// printf("Parent(%d) waiting for pid: %d\n", getpid(), child_pid);
+			int term_pid = waitpid(child_pid, NULL, 0);
+			// printf("Parent(%d) finished waiting for pid: %d\n", getpid(), term_pid);
 		}
 	}
 
@@ -263,12 +280,12 @@ void parse_line(void)
 
 		switch (type) {
 		case NORMAL:
-			printf("NORMAL\n");
+			// printf("NORMAL\n");
 			argc += 1;
 			break;
 
 		case INPUT:
-			printf("INPUT\n");
+			// printf("INPUT\n");
 			type = gettoken(&argv[argc]);
 			if (type != NORMAL) {
 				error("expected file name: but found %s", 
@@ -284,7 +301,7 @@ void parse_line(void)
 			break;
 
 		case OUTPUT:
-			printf("OUTPUT\n");
+			// printf("OUTPUT\n");
 			type = gettoken(&argv[argc]);
 			if (type != NORMAL) {
 				error("expected file name: but found %s", 
@@ -299,33 +316,23 @@ void parse_line(void)
 			break;
 
 		case PIPE:
-			printf("PIPE\n");
+			// printf("PIPE\n");
 			doing_pipe = true;
 			pipe(pipe_fd);
-			// printf("Input pipe: %d\n", pipe_fd[0]);
-			// printf("Output pipe: %d\n", pipe_fd[1]);
-			// close(input_fd);
-			// close(output_fd);
-			// printf("%s\n", "jello");
-			// input_fd = pipe_fd[0];
 			output_fd = pipe_fd[1];
-			// dup2(pipe_fd[0], 0);
-			// dup2(pipe_fd[1], 1);
-			// printf("Input pipe: %d\n", input_fd);
-			// printf("Output pipe: %d\n", output_fd);
 
 			/*FALLTHROUGH*/
 
 		case AMPERSAND:
-			printf("AMPERSAND\n");
+			// printf("AMPERSAND\n");
 			foreground = false;
 
 			/*FALLTHROUGH*/
 
 		case NEWLINE:
-			printf("NEWLINE\n");
+			// printf("NEWLINE\n");
 		case SEMICOLON:
-			printf("SEMICOLON\n");
+			// printf("SEMICOLON\n");
 
 			if (argc == 0)
 				return;
@@ -334,10 +341,14 @@ void parse_line(void)
 
 			run_program(argv, argc, foreground, doing_pipe);
 
-			if pipe
-			sätt input_fd = pipe_fd[0]
+			if(doing_pipe) {
+				close(pipe_fd[1]);
+				input_fd = pipe_fd[0];
+			}
+			else {
+				input_fd = 0;
+			}
 
-			input_fd	= 0;
 			output_fd	= 0;
 			argc		= 0;
 
